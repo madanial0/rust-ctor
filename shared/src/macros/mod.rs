@@ -261,13 +261,57 @@ macro_rules! __ctor_entry {
         $crate::__support::if_has_feature!(anonymous, $features, {
             $crate::__support::ctor_entry!(unnamed, features=$features, imeta=$(#[$fnmeta])*, vis=[$($vis)*], unsafe=$($unsafe)?, item=fn $ident() $block);
         }, {
+            // AIX requires special handling
+            #[cfg(target_os = "aix")]
+            $crate::__support::ctor_entry!(aix, features=$features, imeta=$(#[$fnmeta])*, vis=[$($vis)*], unsafe=$($unsafe)?, item=fn $ident() $block);
+            
+            #[cfg(not(target_os = "aix"))]
             $crate::__support::ctor_entry!(named, features=$features, imeta=$(#[$fnmeta])*, vis=[$($vis)*], unsafe=$($unsafe)?, item=fn $ident() $block);
         });
     };
     (unnamed,features=$features:tt, imeta=$(#[$fnmeta:meta])*, vis=[$($vis:tt)*], unsafe=$($unsafe:ident)?, item=fn $ident:ident() $block:block) => {
         const _: () = {
+            #[cfg(target_os = "aix")]
+            $crate::__support::ctor_entry!(aix, features=$features, imeta=$(#[$fnmeta])*, vis=[$($vis)*], unsafe=$($unsafe)?, item=fn $ident() $block);
+            
+            #[cfg(not(target_os = "aix"))]
             $crate::__support::ctor_entry!(named, features=$features, imeta=$(#[$fnmeta])*, vis=[$($vis)*], unsafe=$($unsafe)?, item=fn $ident() $block);
         };
+    };
+    (aix, features=$features:tt, imeta=$(#[$fnmeta:meta])*, vis=[$($vis:tt)*], unsafe=$($unsafe:ident)?, item=fn $ident:ident() $block:block) => {
+        $(#[$fnmeta])*
+        #[allow(unused)]
+        $($vis)* $($unsafe)? fn $ident() $block
+
+        // AIX-specific constructor wrapper using __sinit naming convention
+        // The function name must start with __sinit80000000_ for AIX to recognize it as a constructor
+        // We use a module to create a unique namespace for the AIX constructor
+        #[doc(hidden)]
+        #[allow(non_snake_case)]
+        mod __aix_ctor_impl {
+            use super::*;
+            
+            #[unsafe(no_mangle)]
+            #[export_name = concat!("__sinit80000000_", stringify!($ident))]
+            extern "C" fn aix_ctor_wrapper() {
+                #[allow(unsafe_code)]
+                {
+                    $crate::__support::if_unsafe!($($unsafe)?, {}, {
+                        $crate::__support::if_has_feature!( __no_warn_on_missing_unsafe, $features, {
+                            #[deprecated="ctor deprecation note:\n\n \
+                            Use of #[ctor] without `unsafe fn` is deprecated. As code execution before main\n\
+                            is unsupported by most Rust runtime functions, these functions must be marked\n\
+                            `unsafe`."]
+                                const fn ctor_without_unsafe_is_deprecated() {}
+                                #[allow(unused)]
+                                static UNSAFE_WARNING: () = ctor_without_unsafe_is_deprecated();
+                        }, {});
+                    });
+
+                    unsafe { $ident(); }
+                }
+            }
+        }
     };
     (named, features=$features:tt, imeta=$(#[$fnmeta:meta])*, vis=[$($vis:tt)*], unsafe=$($unsafe:ident)?, item=fn $ident:ident() $block:block) => {
         $(#[$fnmeta])*
@@ -498,6 +542,7 @@ macro_rules! __ctor_link_section {
             target_os = "dragonfly",
             target_os = "illumos",
             target_os = "haiku",
+            target_os = "aix",
             target_vendor = "apple",
             target_family = "wasm",
             target_arch = "xtensa",

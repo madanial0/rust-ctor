@@ -10,7 +10,7 @@
 
 Module initialization/teardown functions for Rust (like
 `__attribute__((constructor))` in C/C++) for Linux, OSX, FreeBSD, NetBSD,
-Illumos, OpenBSD, DragonFlyBSD, Android, iOS, WASM, and Windows.
+Illumos, OpenBSD, DragonFlyBSD, AIX, Android, iOS, WASM, and Windows.
 
 This library currently requires **Rust > 1.56.0** at a minimum for edition
 2021 support. Library versions 0.2.x should work for edition 2018, and 1.0
@@ -116,6 +116,26 @@ The above example translates into the following Rust code (approximately):
         extern fn foo() { /* ... */ };
         foo
     };
+```
+
+### AIX Support
+
+On AIX, constructors use a different mechanism. Instead of linker sections, AIX recognizes
+functions with names starting with `__sinit80000000_` as constructors. The `#[ctor]` macro
+generates a wrapper function with this naming convention:
+
+```rust
+    #[ctor]
+    fn foo() { /* ... */ }
+    
+    // Expands to approximately:
+    fn foo() { /* ... */ }
+    
+    #[unsafe(no_mangle)]
+    #[export_name = "__sinit80000000_foo"]
+    extern "C" fn aix_ctor_wrapper() {
+        unsafe { foo(); }
+    }
 ```
 
 The `#[dtor]` macro effectively creates a constructor that calls `libc::atexit`

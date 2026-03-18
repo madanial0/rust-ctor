@@ -5,9 +5,15 @@
 //! the `#[ctor]` and `#[dtor]` macros.
 //!
 //! This library works and is regularly tested on Linux, OSX and Windows, with both `+crt-static` and `-crt-static`.
-//! Other platforms are supported but not tested as part of the automatic builds. This library will also work as expected in both
+//! Other platforms including AIX, FreeBSD, NetBSD, OpenBSD, DragonFly BSD, illumos, Haiku, and WebAssembly are supported
+//! but not tested as part of the automatic builds. This library will also work as expected in both
 //! `bin` and `cdylib` outputs, ie: the `ctor` and `dtor` will run at executable or library
 //! startup/shutdown respectively.
+//!
+//! ## AIX Support
+//!
+//! On AIX, constructors are implemented using the `__sinit80000000_*` naming convention. The `#[ctor]` macro
+//! generates a wrapper function with this special name that AIX recognizes as a constructor function.
 //!
 //! This library currently requires Rust > `1.31.0` at a minimum for the
 //! procedural macro support.
